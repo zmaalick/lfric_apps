@@ -1,0 +1,80 @@
+!-------------------------------------------------------------------------------
+! (c) Crown copyright 2025 Met Office. All rights reserved.
+! The file LICENCE, distributed with this code, contains details of the terms
+! under which the code may be used.
+!-------------------------------------------------------------------------------
+!> @brief Algorithm to compute and output tropopause diagnostics.
+
+module tropoht_alg_mod
+
+  use constants_mod,                 only: i_def
+  use field_mod,                     only: field_type
+  use integer_field_mod,             only: integer_field_type
+  use fs_continuity_mod,             only: W3, Wtheta
+  use function_space_collection_mod, only: function_space_collection
+  use function_space_mod,            only: function_space_type
+  use io_config_mod,                 only: use_xios_io
+  use initialise_diagnostics_mod,    only: init_diag => init_diagnostic_field
+  use mesh_mod,                      only: mesh_type
+  use sci_geometric_constants_mod,   only: get_height_fv
+
+  implicit none
+
+  private
+  public :: tropoht_alg
+
+contains
+
+  !> @details Computes tropopause height, temperature, pressure and ICAO height
+  !> and writes them as XIOS diagnostics. Calls locate_tropopause_kernel to
+  !> find the tropopause level, then tropoht_kernel to compute the quantities.
+  !>
+  !> @param[in] theta        Potential temperature
+  !> @param[in] exner_in_wth Exner pressure on Wtheta levels
+  !> @param[in] twod_mesh    2D mesh for function space construction
+  subroutine tropoht_alg(theta, exner_in_wth, twod_mesh)
+
+    use locate_tropopause_kernel_mod, only: locate_tropopause_kernel_type
+    use tropoht_kernel_mod,           only: tropoht_kernel_type
+
+    implicit none
+
+    type(field_type),  intent(in)          :: theta
+    type(field_type),  intent(in)          :: exner_in_wth
+    type(mesh_type),   intent(in), pointer :: twod_mesh
+
+    type(field_type)               :: trop_ht, trop_temp, trop_press, trop_icao_ht
+    type(integer_field_type)       :: trop_level
+    type(field_type),      pointer :: height_wth => null()
+    type(function_space_type), pointer :: vector_space => null()
+    logical :: ht_on, temp_on, press_on, icao_on
+
+    ht_on    = init_diag(trop_ht,      'processed__trop_ht')
+    temp_on  = init_diag(trop_temp,    'processed__trop_temp')
+    press_on = init_diag(trop_press,   'processed__trop_press')
+    icao_on  = init_diag(trop_icao_ht, 'processed__trop_icao_ht')
+
+    if ((ht_on .or. temp_on .or. press_on .or. icao_on) .and. use_xios_io) then
+
+      height_wth => get_height_fv(Wtheta, theta%get_mesh_id())
+
+      vector_space => function_space_collection%get_fs(twod_mesh, 0, 0, W3)
+      call trop_level%initialise(vector_space)
+
+      call invoke( locate_tropopause_kernel_type(theta, exner_in_wth,             &
+                                                 height_wth, trop_level) )
+
+      call invoke( tropoht_kernel_type(theta, exner_in_wth, height_wth,           &
+                                       trop_level, trop_ht, trop_temp,            &
+                                       trop_press, trop_icao_ht) )
+
+      if (ht_on)    call trop_ht%write_field('processed__trop_ht')
+      if (temp_on)  call trop_temp%write_field('processed__trop_temp')
+      if (press_on) call trop_press%write_field('processed__trop_press')
+      if (icao_on)  call trop_icao_ht%write_field('processed__trop_icao_ht')
+
+    end if
+
+  end subroutine tropoht_alg
+
+end module tropoht_alg_mod
