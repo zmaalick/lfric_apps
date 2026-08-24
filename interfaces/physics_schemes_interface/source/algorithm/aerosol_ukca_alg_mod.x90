@@ -422,6 +422,7 @@ contains
     type( field_type ) :: photol_rate_jo1d
     type( field_type ) :: photol_rate_jno2
     type( field_type ) :: photol_rate_jo3p
+    logical(l_def) :: photol_rate_jo3p_flag
     type( field_type ) :: photol_rate_profile
 
     ! Other Photolysis driving fields - pre-set currently
