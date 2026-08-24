@@ -1127,6 +1127,7 @@ contains
                 call invoke (  photol_diags_kernel_type(photol_rate_jo3p,      &
                                                         jp1,                   &
                                                         photol_rates) )
+                end if
               end select
             end do
   
