@@ -1023,7 +1023,7 @@ contains
       ! Sample Rates to output; wtheta grid
       call ls_rain_3d%copy_field_properties(photol_rate_jo1d)
       call ls_rain_3d%copy_field_properties(photol_rate_jno2)
-      call ls_rain_3d%copy_field_properties(photol_rate_jo3p)
+      photol_rate_jo3p_flag = init_diag(photol_rate_jo3p, 'chemistry__photol_rate_jo3p')
 
       call invoke( setval_c(photol_rate_jo1d,  0.0_r_def),                     &
                    setval_c(photol_rate_jno2,  0.0_r_def),                     &
