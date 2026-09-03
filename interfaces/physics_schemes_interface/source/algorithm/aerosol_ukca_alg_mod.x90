@@ -74,6 +74,7 @@ contains
     use aerosol_ukca_kernel_mod,       only: aerosol_ukca_kernel_type
     use glomap_ccn_diags_mod,          only: output_diags_for_glomap_ccn
     use io_config_mod,                 only: use_xios_io, write_diag
+    use initialise_diagnostics_mod,    only: init_diag => init_diagnostic_field
     use xios,                          only: xios_date, xios_get_current_date, &
                                              xios_date_get_day_of_year
     use timing_mod,                    only: start_timing, stop_timing, &
@@ -424,8 +425,13 @@ contains
     ! Photolysis rates array and sample output fields
     type( field_type ) :: photol_rates
     type( field_type ) :: photol_rate_jo1d
+    type( field_type ) :: photol_rate_jo3p
     type( field_type ) :: photol_rate_jno2
     type( field_type ) :: photol_rate_profile
+
+    logical(l_def) :: photol_rate_jo1d_flag
+    logical(l_def) :: photol_rate_jo3p_flag
+    logical(l_def) :: photol_rate_jno2_flag
 
     ! Other Photolysis driving fields - pre-set currently
     type( field_type ) :: sulp_accum
@@ -1023,12 +1029,27 @@ contains
          photol_scheme /= photol_scheme_off ) then
       ! Photolysis currently linked to Strattrop      
 
-      ! Sample Rates to output; wtheta grid
-      call ls_rain_3d%copy_field_properties(photol_rate_jo1d)
-      call ls_rain_3d%copy_field_properties(photol_rate_jno2)
+      ! Sample Rates to output; wtheta grid. Only create and populate a field
+      ! if it has actually been requested for output.
+      photol_rate_jo1d_flag = init_diag( photol_rate_jo1d,                    &
+                                        'chemistry__photol_rate_jo1d' )
+      photol_rate_jo3p_flag = init_diag( photol_rate_jo3p,                    &
+                                        'chemistry__photol_rate_jo3p' )
+      photol_rate_jno2_flag = init_diag( photol_rate_jno2,                    &
+                                        'chemistry__photol_rate_jno2' )
 
-      call invoke( setval_c(photol_rate_jo1d,  0.0_r_def),                     &
-                   setval_c(photol_rate_jno2,  0.0_r_def) )
+      if ( photol_rate_jo1d_flag .or. photol_rate_jo3p_flag .or.               &
+           photol_rate_jno2_flag ) then
+        if ( photol_rate_jo1d_flag ) then
+          call invoke( setval_c(photol_rate_jo1d,  0.0_r_def) )
+        end if
+        if ( photol_rate_jo3p_flag ) then
+          call invoke( setval_c(photol_rate_jo3p,  0.0_r_def) )
+        end if
+        if ( photol_rate_jno2_flag ) then
+          call invoke( setval_c(photol_rate_jno2,  0.0_r_def) )
+        end if
+      end if
       
       ! Only call photolysis if this is a chemistry timestep as photol rates
       ! are only used by chemistry
@@ -1109,20 +1130,31 @@ contains
                                             cv_base,                           &
                                             cv_top ) )
 
-            ! Extract sample rates from full array for verification
-            ! Currently only rates for O1D and NO2 output, so ignore others
+            ! Extract sample rates from full array for verification.
+            ! Only requested diagnostics are populated.
             do jp1 = 1, n_phot_spc
               select case(trim(ratj_varnames(jp1)))
               case ('jo3a')
-                !  jO(1D)         
-                call invoke (  photol_diags_kernel_type(photol_rate_jo1d,      &
-                                                        jp1,                   &
-                                                        photol_rates) )
+                if ( photol_rate_jo1d_flag ) then
+                  !  jO(1D)
+                  call invoke (  photol_diags_kernel_type(photol_rate_jo1d,    &
+                                                          jp1,                   &
+                                                          photol_rates) )
+                end if
+              case ('jo3b', 'jo3p')
+                if ( photol_rate_jo3p_flag ) then
+                  !  jO(3P)
+                  call invoke (  photol_diags_kernel_type(photol_rate_jo3p,    &
+                                                          jp1,                   &
+                                                          photol_rates) )
+                end if
               case ('jno2')
-                !  jNO2
-                call invoke (  photol_diags_kernel_type(photol_rate_jno2,      &
-                                                        jp1,                   &
-                                                        photol_rates) )
+                if ( photol_rate_jno2_flag ) then
+                  !  jNO2
+                  call invoke (  photol_diags_kernel_type(photol_rate_jno2,    &
+                                                          jp1,                   &
+                                                          photol_rates) )
+                end if
               end select
             end do
   
@@ -1570,8 +1602,15 @@ contains
         call emiss_no_aircrft%write_field('chemistry__emiss_no_aircrft')
 
         if (photol_scheme /= photol_scheme_off )  then
-          call photol_rate_jo1d%write_field('chemistry__photol_rate_jo1d')
-          call photol_rate_jno2%write_field('chemistry__photol_rate_jno2')
+          if ( photol_rate_jo1d_flag ) then
+            call photol_rate_jo1d%write_field('chemistry__photol_rate_jo1d')
+          end if
+          if ( photol_rate_jo3p_flag ) then
+            call photol_rate_jo3p%write_field('chemistry__photol_rate_jo3p')
+          end if
+          if ( photol_rate_jno2_flag ) then
+            call photol_rate_jno2%write_field('chemistry__photol_rate_jno2')
+          end if
         end if  
       end if    ! chem_scheme_strattrop
 
