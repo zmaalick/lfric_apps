@@ -5,9 +5,9 @@
 !-----------------------------------------------------------------------------
 
 !> @brief Processes the GLOMAP-mode condensation and cloud condensation
-!>        nuclei number concentration diagnostics.
-!> @details The three diagnostics are derived from the aerosol size
-!>          distribution rather than being scheme outputs, so they are
+!>        nuclei number concentration and dust mass concentration diagnostics.
+!> @details The diagnostics are derived from the aerosol size distribution
+!>          and composition rather than being scheme outputs, so they are
 !>          computed at output time and only when at least one of them has
 !>          been requested. The same routine serves both the GLOMAP
 !>          climatology and the prognostic UKCA paths.
@@ -27,12 +27,15 @@ module glomap_ccn_diags_mod
 
 contains
 
-  !> @brief Compute and output the CN and CCN number concentrations
+  !> @brief Compute and output the CN and CCN number concentrations and the
+  !>        dust mass concentrations
   !> @details Reproduces the UM diagnostics m01s38i437, m01s38i700 and
-  !>          m01s38i701. The dry modal diameters are only refreshed on
-  !>          RADAER timesteps on the GLOMAP climatology path, so requesting
-  !>          these diagnostics more frequently than the RADAER call reuses
-  !>          the diameters of the most recent RADAER timestep.
+  !>          m01s38i701 (number concentrations) and m01s38i502 and
+  !>          m01s38i503 (dust mass concentrations). The dry modal diameters
+  !>          are only refreshed on RADAER timesteps on the GLOMAP
+  !>          climatology path, so requesting the number concentrations more
+  !>          frequently than the RADAER call reuses the diameters of the
+  !>          most recent RADAER timestep.
   !> @param[in] theta_in_wth  Potential temperature field
   !> @param[in] exner_in_wth  Exner pressure in potential temperature space
   !> @param[in] n_ait_sol     Aitken soluble mode number mixing ratio
@@ -47,6 +50,9 @@ contains
   !> @param[in] drydp_ait_ins Aitken insoluble mode dry modal diameter
   !> @param[in] drydp_acc_ins Accumulation insoluble mode dry modal diameter
   !> @param[in] drydp_cor_ins Coarse insoluble mode dry modal diameter
+  !> @param[in] acc_ins_du    Accumulation insoluble mode dust mass mixing
+  !!                          ratio
+  !> @param[in] cor_ins_du    Coarse insoluble mode dust mass mixing ratio
   subroutine output_diags_for_glomap_ccn( theta_in_wth,                        &
                                           exner_in_wth,                        &
                                           n_ait_sol,                           &
@@ -60,10 +66,12 @@ contains
                                           drydp_cor_sol,                       &
                                           drydp_ait_ins,                       &
                                           drydp_acc_ins,                       &
-                                          drydp_cor_ins )
+                                          drydp_cor_ins,                       &
+                                          acc_ins_du,                          &
+                                          cor_ins_du )
 
     use glomap_ccn_diag_kernel_mod, only: glomap_ccn_diag_kernel_type
-    use planet_config_mod,          only: p_zero, one_over_kappa
+    use planet_config_mod,          only: p_zero, one_over_kappa, rd
 
     implicit none
 
@@ -81,14 +89,20 @@ contains
     type( field_type ), intent(in) :: drydp_ait_ins
     type( field_type ), intent(in) :: drydp_acc_ins
     type( field_type ), intent(in) :: drydp_cor_ins
+    type( field_type ), intent(in) :: acc_ins_du
+    type( field_type ), intent(in) :: cor_ins_du
 
     type( field_type ) :: cn_number_conc
     type( field_type ) :: ccn_number_conc_30nm
     type( field_type ) :: ccn_number_conc_50nm
+    type( field_type ) :: mconc_du_acc_ins
+    type( field_type ) :: mconc_du_cor_ins
 
     logical( kind=l_def ) :: cn_flag
     logical( kind=l_def ) :: ccn_30nm_flag
     logical( kind=l_def ) :: ccn_50nm_flag
+    logical( kind=l_def ) :: du_acc_ins_flag
+    logical( kind=l_def ) :: du_cor_ins_flag
     logical( kind=l_def ) :: ignore
 
     type( mesh_type ), pointer :: aerosol_mesh
@@ -113,10 +127,17 @@ contains
     ccn_50nm_flag = init_diag( ccn_number_conc_50nm,                           &
                               'aerosol__ccn_number_conc_50nm',                 &
                                force_mesh = aerosol_mesh )
+    du_acc_ins_flag = init_diag( mconc_du_acc_ins,                             &
+                                'aerosol__mconc_du_acc_ins',                   &
+                                 force_mesh = aerosol_mesh )
+    du_cor_ins_flag = init_diag( mconc_du_cor_ins,                             &
+                                'aerosol__mconc_du_cor_ins',                   &
+                                 force_mesh = aerosol_mesh )
 
-    if ( cn_flag .or. ccn_30nm_flag .or. ccn_50nm_flag ) then
+    if ( cn_flag .or. ccn_30nm_flag .or. ccn_50nm_flag .or.                    &
+         du_acc_ins_flag .or. du_cor_ins_flag ) then
 
-      ! A single kernel call fills all three fields, so any field that was
+      ! A single kernel call fills all five fields, so any field that was
       ! not requested still has to be a real field rather than an empty one
       if ( .not. cn_flag ) then
         ignore = init_diag( cn_number_conc,                                    &
@@ -136,12 +157,27 @@ contains
                             activate = .true.,                                 &
                             force_mesh = aerosol_mesh )
       end if
+      if ( .not. du_acc_ins_flag ) then
+        ignore = init_diag( mconc_du_acc_ins,                                  &
+                           'aerosol__mconc_du_acc_ins',                        &
+                            activate = .true.,                                 &
+                            force_mesh = aerosol_mesh )
+      end if
+      if ( .not. du_cor_ins_flag ) then
+        ignore = init_diag( mconc_du_cor_ins,                                  &
+                           'aerosol__mconc_du_cor_ins',                        &
+                            activate = .true.,                                 &
+                            force_mesh = aerosol_mesh )
+      end if
 
       call invoke( glomap_ccn_diag_kernel_type( cn_number_conc,                &
                                                 ccn_number_conc_30nm,          &
                                                 ccn_number_conc_50nm,          &
+                                                mconc_du_acc_ins,              &
+                                                mconc_du_cor_ins,              &
                                                 p_zero,                        &
                                                 one_over_kappa,                &
+                                                rd,                            &
                                                 theta_in_wth,                  &
                                                 exner_in_wth,                  &
                                                 n_ait_sol,                     &
@@ -155,11 +191,15 @@ contains
                                                 drydp_cor_sol,                 &
                                                 drydp_ait_ins,                 &
                                                 drydp_acc_ins,                 &
-                                                drydp_cor_ins ) )
+                                                drydp_cor_ins,                 &
+                                                acc_ins_du,                    &
+                                                cor_ins_du ) )
 
-      if ( cn_flag )       call cn_number_conc%write_field()
-      if ( ccn_30nm_flag ) call ccn_number_conc_30nm%write_field()
-      if ( ccn_50nm_flag ) call ccn_number_conc_50nm%write_field()
+      if ( cn_flag )         call cn_number_conc%write_field()
+      if ( ccn_30nm_flag )   call ccn_number_conc_30nm%write_field()
+      if ( ccn_50nm_flag )   call ccn_number_conc_50nm%write_field()
+      if ( du_acc_ins_flag ) call mconc_du_acc_ins%write_field()
+      if ( du_cor_ins_flag ) call mconc_du_cor_ins%write_field()
 
     end if
 

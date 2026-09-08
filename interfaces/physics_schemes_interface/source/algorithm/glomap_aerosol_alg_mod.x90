@@ -371,7 +371,8 @@ contains
         call cloud_drop_no_conc_aero%write_field('aerosol__cloud_drop_no_conc')
       end if
 
-      ! CN and CCN number concentrations, computed only when requested
+      ! CN and CCN number concentrations and dust mass concentrations,
+      ! computed only when requested
       call output_diags_for_glomap_ccn( theta_in_wth,                          &
                                         exner_in_wth,                          &
                                         n_ait_sol,                             &
@@ -385,7 +386,9 @@ contains
                                         drydp_cor_sol,                         &
                                         drydp_ait_ins,                         &
                                         drydp_acc_ins,                         &
-                                        drydp_cor_ins )
+                                        drydp_cor_ins,                         &
+                                        acc_ins_du,                            &
+                                        cor_ins_du )
 
       if ( LPROF ) call stop_timing( id_diags, 'diags.glomap_clim' )
     end if

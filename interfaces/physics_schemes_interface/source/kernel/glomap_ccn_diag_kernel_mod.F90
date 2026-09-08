@@ -23,6 +23,13 @@
 !>          no drydp_nuc_sol field; its contribution is negligible at the
 !>          30 nm and 50 nm thresholds but not at 3 nm, so the condensation
 !>          nuclei count is a low estimate under prognostic UKCA.
+!>
+!>          The dust mass concentrations reproduce m01s38i502 and m01s38i503
+!>          from ukca_mode_diags_mod, where the CMIP6 component mass
+!>          concentration reduces to the component mass mixing ratio times
+!>          the air density p / (Rd * T). They are computed here rather than
+!>          as an XIOS expression so that every operand is on the aerosol
+!>          mesh and uses the same pressure and temperature as UKCA.
 
 module glomap_ccn_diag_kernel_mod
 
@@ -48,12 +55,15 @@ module glomap_ccn_diag_kernel_mod
 
   type, public, extends(kernel_type) :: glomap_ccn_diag_kernel_type
     private
-    type(arg_type) :: meta_args(19) = (/                &
+    type(arg_type) :: meta_args(24) = (/                &
          arg_type(GH_FIELD,  GH_REAL, GH_WRITE, WTHETA), & ! cn_number_conc
          arg_type(GH_FIELD,  GH_REAL, GH_WRITE, WTHETA), & ! ccn_no_conc_30nm
          arg_type(GH_FIELD,  GH_REAL, GH_WRITE, WTHETA), & ! ccn_no_conc_50nm
+         arg_type(GH_FIELD,  GH_REAL, GH_WRITE, WTHETA), & ! mconc_du_acc_ins
+         arg_type(GH_FIELD,  GH_REAL, GH_WRITE, WTHETA), & ! mconc_du_cor_ins
          arg_type(GH_SCALAR, GH_REAL, GH_READ),          & ! p_zero
          arg_type(GH_SCALAR, GH_REAL, GH_READ),          & ! one_over_kappa
+         arg_type(GH_SCALAR, GH_REAL, GH_READ),          & ! rd
          arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! theta_in_wth
          arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! exner_in_wth
          arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! n_ait_sol
@@ -67,7 +77,9 @@ module glomap_ccn_diag_kernel_mod
          arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! drydp_cor_sol
          arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! drydp_ait_ins
          arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! drydp_acc_ins
-         arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA)  & ! drydp_cor_ins
+         arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! drydp_cor_ins
+         arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! acc_ins_du
+         arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA)  & ! cor_ins_du
          /)
     integer :: operates_on = CELL_COLUMN
   contains
@@ -79,7 +91,8 @@ module glomap_ccn_diag_kernel_mod
 contains
 
 !> @brief Sum the lognormal tail of each GLOMAP mode above three dry diameter
-!>        thresholds to give condensation and cloud condensation nuclei counts.
+!>        thresholds to give condensation and cloud condensation nuclei
+!>        counts, and convert the dust mass mixing ratios to concentrations.
 !> @param[in]     nlayers              The number of layers
 !> @param[in,out] cn_number_conc       Condensation nuclei number
 !!                                      concentration, dry diameter > 3 nm
@@ -87,9 +100,14 @@ contains
 !!                                      concentration, dry diameter > 30 nm
 !> @param[in,out] ccn_number_conc_50nm Cloud condensation nuclei number
 !!                                      concentration, dry diameter > 50 nm
+!> @param[in,out] mconc_du_acc_ins     Dust mass concentration in the
+!!                                      accumulation insoluble mode
+!> @param[in,out] mconc_du_cor_ins     Dust mass concentration in the
+!!                                      coarse insoluble mode
 !> @param[in]     p_zero               Reference surface pressure
 !> @param[in]     one_over_kappa       Reciprocal of the ratio of the gas
 !!                                      constant to the specific heat
+!> @param[in]     rd                   Gas constant for dry air
 !> @param[in]     theta_in_wth         Potential temperature field
 !> @param[in]     exner_in_wth         Exner pressure in potential
 !!                                      temperature space
@@ -109,6 +127,10 @@ contains
 !> @param[in]     drydp_ait_ins        Aitken insoluble mode dry diameter
 !> @param[in]     drydp_acc_ins        Accumulation insoluble mode dry diameter
 !> @param[in]     drydp_cor_ins        Coarse insoluble mode dry diameter
+!> @param[in]     acc_ins_du           Accumulation insoluble mode dust mass
+!!                                      mixing ratio
+!> @param[in]     cor_ins_du           Coarse insoluble mode dust mass
+!!                                      mixing ratio
 !> @param[in]     ndf_wth              Number of degrees of freedom per cell
 !!                                      for the potential temperature space
 !> @param[in]     undf_wth             Number of unique degrees of freedom
@@ -120,8 +142,11 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
                                  cn_number_conc,                               &
                                  ccn_number_conc_30nm,                         &
                                  ccn_number_conc_50nm,                         &
+                                 mconc_du_acc_ins,                             &
+                                 mconc_du_cor_ins,                             &
                                  p_zero,                                       &
                                  one_over_kappa,                               &
+                                 rd,                                           &
                                  theta_in_wth,                                 &
                                  exner_in_wth,                                 &
                                  n_ait_sol,                                    &
@@ -136,6 +161,8 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
                                  drydp_ait_ins,                                &
                                  drydp_acc_ins,                                &
                                  drydp_cor_ins,                                &
+                                 acc_ins_du,                                   &
+                                 cor_ins_du,                                   &
                                  ndf_wth, undf_wth, map_wth )
 
   use constants_mod,                   only: r_def, i_def
@@ -154,9 +181,12 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
   real(kind=r_def), intent(inout), dimension(undf_wth) :: cn_number_conc
   real(kind=r_def), intent(inout), dimension(undf_wth) :: ccn_number_conc_30nm
   real(kind=r_def), intent(inout), dimension(undf_wth) :: ccn_number_conc_50nm
+  real(kind=r_def), intent(inout), dimension(undf_wth) :: mconc_du_acc_ins
+  real(kind=r_def), intent(inout), dimension(undf_wth) :: mconc_du_cor_ins
 
   real(kind=r_def), intent(in) :: p_zero
   real(kind=r_def), intent(in) :: one_over_kappa
+  real(kind=r_def), intent(in) :: rd
 
   real(kind=r_def), intent(in), dimension(undf_wth) :: theta_in_wth
   real(kind=r_def), intent(in), dimension(undf_wth) :: exner_in_wth
@@ -172,6 +202,8 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
   real(kind=r_def), intent(in), dimension(undf_wth) :: drydp_ait_ins
   real(kind=r_def), intent(in), dimension(undf_wth) :: drydp_acc_ins
   real(kind=r_def), intent(in), dimension(undf_wth) :: drydp_cor_ins
+  real(kind=r_def), intent(in), dimension(undf_wth) :: acc_ins_du
+  real(kind=r_def), intent(in), dimension(undf_wth) :: cor_ins_du
 
   ! Internal variables
 
@@ -212,6 +244,9 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
   real(kind=r_def), dimension(nmodes_diag) :: drydp
 
   real(kind=r_def) :: exner_k        ! Exner pressure at this level
+  real(kind=r_def) :: pressure       ! Pressure at this level (Pa)
+  real(kind=r_def) :: temperature    ! Temperature at this level (K)
+  real(kind=r_def) :: air_dens       ! Mass density of air (kg m-3)
   real(kind=r_def) :: air_num_dens   ! Number density of air (cm-3)
   real(kind=r_def) :: number_conc    ! Number concentration of a mode (cm-3)
   real(kind=r_def) :: cn_sum         ! Running sum for dry diameter > 3 nm
@@ -229,17 +264,26 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
   end do
 
   !---------------------------------------------------------------------------
-  ! Sum the tail of each mode above the three thresholds
+  ! Sum the tail of each mode above the three thresholds, and convert the
+  ! dust mass mixing ratios to mass concentrations
   !---------------------------------------------------------------------------
 
   do k = 1, nlayers
 
+    exner_k     = exner_in_wth(map_wth(1) + k)
+    pressure    = p_zero * exner_k**one_over_kappa
+    temperature = exner_k * theta_in_wth(map_wth(1) + k)
+
     ! Number density of air from pressure and temperature, matching
     ! aird in ukca_mode_diags_mod
-    exner_k = exner_in_wth(map_wth(1) + k)
-    air_num_dens = p_zero * exner_k**one_over_kappa                           &
-                 / ( exner_k * theta_in_wth(map_wth(1) + k)                   &
-                     * boltzmann * m3_to_cm3 )
+    air_num_dens = pressure / ( temperature * boltzmann * m3_to_cm3 )
+
+    ! Mass density of dry air, as used for the UKCA component mass
+    ! concentrations in ukca_mode_diags_mod
+    air_dens = pressure / ( rd * temperature )
+
+    mconc_du_acc_ins(map_wth(1) + k) = acc_ins_du(map_wth(1) + k) * air_dens
+    mconc_du_cor_ins(map_wth(1) + k) = cor_ins_du(map_wth(1) + k) * air_dens
 
     number_mr(1) = n_ait_sol(map_wth(1) + k)
     number_mr(2) = n_acc_sol(map_wth(1) + k)
@@ -288,6 +332,8 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
   cn_number_conc(map_wth(1))       = cn_number_conc(map_wth(1) + 1)
   ccn_number_conc_30nm(map_wth(1)) = ccn_number_conc_30nm(map_wth(1) + 1)
   ccn_number_conc_50nm(map_wth(1)) = ccn_number_conc_50nm(map_wth(1) + 1)
+  mconc_du_acc_ins(map_wth(1))     = mconc_du_acc_ins(map_wth(1) + 1)
+  mconc_du_cor_ins(map_wth(1))     = mconc_du_cor_ins(map_wth(1) + 1)
 
 end subroutine glomap_ccn_diag_code
 
