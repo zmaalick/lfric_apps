@@ -30,6 +30,10 @@
 !>          the air density p / (Rd * T). They are computed here rather than
 !>          as an XIOS expression so that every operand is on the aerosol
 !>          mesh and uses the same pressure and temperature as UKCA.
+!>
+!>          Every output field is only populated when it has been requested
+!>          as a diagnostic; unrequested fields share the empty data array
+!>          and are left untouched.
 
 module glomap_ccn_diag_kernel_mod
 
@@ -42,6 +46,8 @@ module glomap_ccn_diag_kernel_mod
   use fs_continuity_mod, only: WTHETA
 
   use kernel_mod,        only: kernel_type
+
+  use empty_data_mod,    only: empty_real_data
 
   implicit none
 
@@ -178,11 +184,13 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
   integer(kind=i_def), intent(in) :: undf_wth
   integer(kind=i_def), dimension(ndf_wth), intent(in) :: map_wth
 
-  real(kind=r_def), intent(inout), dimension(undf_wth) :: cn_number_conc
-  real(kind=r_def), intent(inout), dimension(undf_wth) :: ccn_number_conc_30nm
-  real(kind=r_def), intent(inout), dimension(undf_wth) :: ccn_number_conc_50nm
-  real(kind=r_def), intent(inout), dimension(undf_wth) :: mconc_du_acc_ins
-  real(kind=r_def), intent(inout), dimension(undf_wth) :: mconc_du_cor_ins
+  ! Diagnostic outputs, which point at the shared empty data array when
+  ! the diagnostic has not been requested
+  real(kind=r_def), pointer, dimension(:), intent(inout) :: cn_number_conc
+  real(kind=r_def), pointer, dimension(:), intent(inout) :: ccn_number_conc_30nm
+  real(kind=r_def), pointer, dimension(:), intent(inout) :: ccn_number_conc_50nm
+  real(kind=r_def), pointer, dimension(:), intent(inout) :: mconc_du_acc_ins
+  real(kind=r_def), pointer, dimension(:), intent(inout) :: mconc_du_cor_ins
 
   real(kind=r_def), intent(in) :: p_zero
   real(kind=r_def), intent(in) :: one_over_kappa
@@ -239,8 +247,8 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
   ! Reciprocal of sqrt(2)*ln(sigmag) for each mode
   real(kind=r_def), dimension(nmodes_diag) :: recip_width
 
-  ! Number mixing ratio and dry modal diameter of each mode at one level
-  real(kind=r_def), dimension(nmodes_diag) :: number_mr
+  ! Number concentration and dry modal diameter of each mode at one level
+  real(kind=r_def), dimension(nmodes_diag) :: number_conc
   real(kind=r_def), dimension(nmodes_diag) :: drydp
 
   real(kind=r_def) :: exner_k        ! Exner pressure at this level
@@ -248,24 +256,42 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
   real(kind=r_def) :: temperature    ! Temperature at this level (K)
   real(kind=r_def) :: air_dens       ! Mass density of air (kg m-3)
   real(kind=r_def) :: air_num_dens   ! Number density of air (cm-3)
-  real(kind=r_def) :: number_conc    ! Number concentration of a mode (cm-3)
-  real(kind=r_def) :: cn_sum         ! Running sum for dry diameter > 3 nm
-  real(kind=r_def) :: ccn_30nm_sum   ! Running sum for dry diameter > 30 nm
-  real(kind=r_def) :: ccn_50nm_sum   ! Running sum for dry diameter > 50 nm
+  real(kind=r_def) :: tail_sum       ! Running sum over the modes
+
+  ! Which diagnostics have real data behind them
+  logical :: l_cn
+  logical :: l_ccn_30nm
+  logical :: l_ccn_50nm
+  logical :: l_du_acc_ins
+  logical :: l_du_cor_ins
+  logical :: l_number_conc
 
   integer(kind=i_def) :: k, imode
+
+  !---------------------------------------------------------------------------
+  ! Determine which diagnostics have been requested
+  !---------------------------------------------------------------------------
+
+  l_cn         = .not. associated( cn_number_conc,       empty_real_data )
+  l_ccn_30nm   = .not. associated( ccn_number_conc_30nm, empty_real_data )
+  l_ccn_50nm   = .not. associated( ccn_number_conc_50nm, empty_real_data )
+  l_du_acc_ins = .not. associated( mconc_du_acc_ins,     empty_real_data )
+  l_du_cor_ins = .not. associated( mconc_du_cor_ins,     empty_real_data )
+
+  l_number_conc = l_cn .or. l_ccn_30nm .or. l_ccn_50nm
 
   !---------------------------------------------------------------------------
   ! Lognormal width of each mode, which does not vary in the column
   !---------------------------------------------------------------------------
 
-  do imode = 1, nmodes_diag
-    recip_width(imode) = 1.0_r_def / ( root_two * log( sigmag(imode) ) )
-  end do
+  if ( l_number_conc ) then
+    do imode = 1, nmodes_diag
+      recip_width(imode) = 1.0_r_def / ( root_two * log( sigmag(imode) ) )
+    end do
+  end if
 
   !---------------------------------------------------------------------------
-  ! Sum the tail of each mode above the three thresholds, and convert the
-  ! dust mass mixing ratios to mass concentrations
+  ! Column loop
   !---------------------------------------------------------------------------
 
   do k = 1, nlayers
@@ -274,66 +300,112 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
     pressure    = p_zero * exner_k**one_over_kappa
     temperature = exner_k * theta_in_wth(map_wth(1) + k)
 
-    ! Number density of air from pressure and temperature, matching
-    ! aird in ukca_mode_diags_mod
-    air_num_dens = pressure / ( temperature * boltzmann * m3_to_cm3 )
+    !-------------------------------------------------------------------------
+    ! Number concentrations above each dry diameter threshold
+    !-------------------------------------------------------------------------
 
-    ! Mass density of dry air, as used for the UKCA component mass
-    ! concentrations in ukca_mode_diags_mod
-    air_dens = pressure / ( rd * temperature )
+    if ( l_number_conc ) then
 
-    mconc_du_acc_ins(map_wth(1) + k) = acc_ins_du(map_wth(1) + k) * air_dens
-    mconc_du_cor_ins(map_wth(1) + k) = cor_ins_du(map_wth(1) + k) * air_dens
-
-    number_mr(1) = n_ait_sol(map_wth(1) + k)
-    number_mr(2) = n_acc_sol(map_wth(1) + k)
-    number_mr(3) = n_cor_sol(map_wth(1) + k)
-    number_mr(4) = n_ait_ins(map_wth(1) + k)
-    number_mr(5) = n_acc_ins(map_wth(1) + k)
-    number_mr(6) = n_cor_ins(map_wth(1) + k)
-
-    drydp(1) = max( drydp_ait_sol(map_wth(1) + k), drydp_min )
-    drydp(2) = max( drydp_acc_sol(map_wth(1) + k), drydp_min )
-    drydp(3) = max( drydp_cor_sol(map_wth(1) + k), drydp_min )
-    drydp(4) = max( drydp_ait_ins(map_wth(1) + k), drydp_min )
-    drydp(5) = max( drydp_acc_ins(map_wth(1) + k), drydp_min )
-    drydp(6) = max( drydp_cor_ins(map_wth(1) + k), drydp_min )
-
-    cn_sum       = 0.0_r_def
-    ccn_30nm_sum = 0.0_r_def
-    ccn_50nm_sum = 0.0_r_def
-
-    do imode = 1, nmodes_diag
+      ! Number density of air from pressure and temperature, matching
+      ! aird in ukca_mode_diags_mod
+      air_num_dens = pressure / ( temperature * boltzmann * m3_to_cm3 )
 
       ! Number mixing ratios are per air molecule, so scaling by the air
       ! number density gives particles per cubic centimetre
-      number_conc = number_mr(imode) * air_num_dens
+      number_conc(1) = n_ait_sol(map_wth(1) + k) * air_num_dens
+      number_conc(2) = n_acc_sol(map_wth(1) + k) * air_num_dens
+      number_conc(3) = n_cor_sol(map_wth(1) + k) * air_num_dens
+      number_conc(4) = n_ait_ins(map_wth(1) + k) * air_num_dens
+      number_conc(5) = n_acc_ins(map_wth(1) + k) * air_num_dens
+      number_conc(6) = n_cor_ins(map_wth(1) + k) * air_num_dens
 
-      cn_sum = cn_sum + 0.5_r_def * number_conc * ( 1.0_r_def -               &
-          erf( log( dp0_cn / drydp(imode) ) * recip_width(imode) ) )
+      drydp(1) = max( drydp_ait_sol(map_wth(1) + k), drydp_min )
+      drydp(2) = max( drydp_acc_sol(map_wth(1) + k), drydp_min )
+      drydp(3) = max( drydp_cor_sol(map_wth(1) + k), drydp_min )
+      drydp(4) = max( drydp_ait_ins(map_wth(1) + k), drydp_min )
+      drydp(5) = max( drydp_acc_ins(map_wth(1) + k), drydp_min )
+      drydp(6) = max( drydp_cor_ins(map_wth(1) + k), drydp_min )
 
-      ccn_30nm_sum = ccn_30nm_sum + 0.5_r_def * number_conc * ( 1.0_r_def -   &
-          erf( log( dp0_30nm / drydp(imode) ) * recip_width(imode) ) )
+      ! Condensation nuclei: dry diameter > 3 nm
+      if ( l_cn ) then
+        tail_sum = 0.0_r_def
+        do imode = 1, nmodes_diag
+          tail_sum = tail_sum + 0.5_r_def * number_conc(imode) *              &
+              ( 1.0_r_def - erf( log( dp0_cn / drydp(imode) )                 &
+                                 * recip_width(imode) ) )
+        end do
+        cn_number_conc(map_wth(1) + k) = tail_sum
+      end if
 
-      ccn_50nm_sum = ccn_50nm_sum + 0.5_r_def * number_conc * ( 1.0_r_def -   &
-          erf( log( dp0_50nm / drydp(imode) ) * recip_width(imode) ) )
+      ! Cloud condensation nuclei: dry diameter > 30 nm
+      if ( l_ccn_30nm ) then
+        tail_sum = 0.0_r_def
+        do imode = 1, nmodes_diag
+          tail_sum = tail_sum + 0.5_r_def * number_conc(imode) *              &
+              ( 1.0_r_def - erf( log( dp0_30nm / drydp(imode) )               &
+                                 * recip_width(imode) ) )
+        end do
+        ccn_number_conc_30nm(map_wth(1) + k) = tail_sum
+      end if
 
-    end do
+      ! Cloud condensation nuclei: dry diameter > 50 nm
+      if ( l_ccn_50nm ) then
+        tail_sum = 0.0_r_def
+        do imode = 1, nmodes_diag
+          tail_sum = tail_sum + 0.5_r_def * number_conc(imode) *              &
+              ( 1.0_r_def - erf( log( dp0_50nm / drydp(imode) )               &
+                                 * recip_width(imode) ) )
+        end do
+        ccn_number_conc_50nm(map_wth(1) + k) = tail_sum
+      end if
 
-    cn_number_conc(map_wth(1) + k)       = cn_sum
-    ccn_number_conc_30nm(map_wth(1) + k) = ccn_30nm_sum
-    ccn_number_conc_50nm(map_wth(1) + k) = ccn_50nm_sum
+    end if
+
+    !-------------------------------------------------------------------------
+    ! Dust mass concentrations: mass mixing ratio times the mass density of
+    ! dry air, as for the UKCA component mass concentrations in
+    ! ukca_mode_diags_mod
+    !-------------------------------------------------------------------------
+
+    if ( l_du_acc_ins .or. l_du_cor_ins ) then
+
+      air_dens = pressure / ( rd * temperature )
+
+      if ( l_du_acc_ins ) then
+        mconc_du_acc_ins(map_wth(1) + k) = acc_ins_du(map_wth(1) + k) *       &
+                                           air_dens
+      end if
+
+      if ( l_du_cor_ins ) then
+        mconc_du_cor_ins(map_wth(1) + k) = cor_ins_du(map_wth(1) + k) *       &
+                                           air_dens
+      end if
+
+    end if
 
   end do
 
+  !---------------------------------------------------------------------------
   ! The zeroth level is redundant for the GLOMAP fields, so set it to the
   ! same as the first level. It appears in the diagnostic output but is not
   ! used in model evolution.
-  cn_number_conc(map_wth(1))       = cn_number_conc(map_wth(1) + 1)
-  ccn_number_conc_30nm(map_wth(1)) = ccn_number_conc_30nm(map_wth(1) + 1)
-  ccn_number_conc_50nm(map_wth(1)) = ccn_number_conc_50nm(map_wth(1) + 1)
-  mconc_du_acc_ins(map_wth(1))     = mconc_du_acc_ins(map_wth(1) + 1)
-  mconc_du_cor_ins(map_wth(1))     = mconc_du_cor_ins(map_wth(1) + 1)
+  !---------------------------------------------------------------------------
+
+  if ( l_cn ) then
+    cn_number_conc(map_wth(1)) = cn_number_conc(map_wth(1) + 1)
+  end if
+  if ( l_ccn_30nm ) then
+    ccn_number_conc_30nm(map_wth(1)) = ccn_number_conc_30nm(map_wth(1) + 1)
+  end if
+  if ( l_ccn_50nm ) then
+    ccn_number_conc_50nm(map_wth(1)) = ccn_number_conc_50nm(map_wth(1) + 1)
+  end if
+  if ( l_du_acc_ins ) then
+    mconc_du_acc_ins(map_wth(1)) = mconc_du_acc_ins(map_wth(1) + 1)
+  end if
+  if ( l_du_cor_ins ) then
+    mconc_du_cor_ins(map_wth(1)) = mconc_du_cor_ins(map_wth(1) + 1)
+  end if
 
 end subroutine glomap_ccn_diag_code
 
