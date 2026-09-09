@@ -26,8 +26,9 @@
 !>
 !>          The dust mass concentrations are the dust mass mixing ratios of
 !>          the accumulation and coarse insoluble modes multiplied by the
-!>          air density p / (Rd * T). They are computed here rather than as
-!>          an XIOS expression so that every operand is on the aerosol mesh.
+!>          dry air density, which is the density the mixing ratios are
+!>          defined against. They are computed here rather than as an XIOS
+!>          expression so that every operand is on the aerosol mesh.
 !>
 !>          Every output field is only populated when it has been requested
 !>          as a diagnostic; unrequested fields share the empty data array
@@ -67,9 +68,9 @@ module glomap_ccn_diag_kernel_mod
          arg_type(GH_FIELD,  GH_REAL, GH_WRITE, WTHETA), & ! mconc_du_cor_ins
          arg_type(GH_SCALAR, GH_REAL, GH_READ),          & ! p_zero
          arg_type(GH_SCALAR, GH_REAL, GH_READ),          & ! one_over_kappa
-         arg_type(GH_SCALAR, GH_REAL, GH_READ),          & ! rd
          arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! theta_in_wth
          arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! exner_in_wth
+         arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! rho_in_wth
          arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! n_ait_sol
          arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! n_acc_sol
          arg_type(GH_FIELD,  GH_REAL, GH_READ,  WTHETA), & ! n_cor_sol
@@ -111,9 +112,10 @@ contains
 !> @param[in]     p_zero               Reference surface pressure
 !> @param[in]     one_over_kappa       Reciprocal of the ratio of the gas
 !!                                      constant to the specific heat
-!> @param[in]     rd                   Gas constant for dry air
 !> @param[in]     theta_in_wth         Potential temperature field
 !> @param[in]     exner_in_wth         Exner pressure in potential
+!!                                      temperature space
+!> @param[in]     rho_in_wth           Dry air density in potential
 !!                                      temperature space
 !> @param[in]     n_ait_sol            Aitken soluble mode number mixing ratio
 !> @param[in]     n_acc_sol            Accumulation soluble mode number
@@ -150,9 +152,9 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
                                  mconc_du_cor_ins,                             &
                                  p_zero,                                       &
                                  one_over_kappa,                               &
-                                 rd,                                           &
                                  theta_in_wth,                                 &
                                  exner_in_wth,                                 &
+                                 rho_in_wth,                                   &
                                  n_ait_sol,                                    &
                                  n_acc_sol,                                    &
                                  n_cor_sol,                                    &
@@ -192,10 +194,10 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
 
   real(kind=r_def), intent(in) :: p_zero
   real(kind=r_def), intent(in) :: one_over_kappa
-  real(kind=r_def), intent(in) :: rd
 
   real(kind=r_def), intent(in), dimension(undf_wth) :: theta_in_wth
   real(kind=r_def), intent(in), dimension(undf_wth) :: exner_in_wth
+  real(kind=r_def), intent(in), dimension(undf_wth) :: rho_in_wth
   real(kind=r_def), intent(in), dimension(undf_wth) :: n_ait_sol
   real(kind=r_def), intent(in), dimension(undf_wth) :: n_acc_sol
   real(kind=r_def), intent(in), dimension(undf_wth) :: n_cor_sol
@@ -252,7 +254,6 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
   real(kind=r_def) :: exner_k        ! Exner pressure at this level
   real(kind=r_def) :: pressure       ! Pressure at this level (Pa)
   real(kind=r_def) :: temperature    ! Temperature at this level (K)
-  real(kind=r_def) :: air_dens       ! Mass density of air (kg m-3)
   real(kind=r_def) :: air_num_dens   ! Number density of air (cm-3)
   real(kind=r_def) :: tail_sum       ! Running sum over the modes
 
@@ -359,24 +360,17 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
     end if
 
     !-------------------------------------------------------------------------
-    ! Dust mass concentrations: mass mixing ratio times the mass density of
-    ! dry air
+    ! Dust mass concentrations: mass mixing ratio times the dry air density
     !-------------------------------------------------------------------------
 
-    if ( l_du_acc_ins .or. l_du_cor_ins ) then
+    if ( l_du_acc_ins ) then
+      mconc_du_acc_ins(map_wth(1) + k) = acc_ins_du(map_wth(1) + k) *         &
+                                         rho_in_wth(map_wth(1) + k)
+    end if
 
-      air_dens = pressure / ( rd * temperature )
-
-      if ( l_du_acc_ins ) then
-        mconc_du_acc_ins(map_wth(1) + k) = acc_ins_du(map_wth(1) + k) *       &
-                                           air_dens
-      end if
-
-      if ( l_du_cor_ins ) then
-        mconc_du_cor_ins(map_wth(1) + k) = cor_ins_du(map_wth(1) + k) *       &
-                                           air_dens
-      end if
-
+    if ( l_du_cor_ins ) then
+      mconc_du_cor_ins(map_wth(1) + k) = cor_ins_du(map_wth(1) + k) *         &
+                                         rho_in_wth(map_wth(1) + k)
     end if
 
   end do

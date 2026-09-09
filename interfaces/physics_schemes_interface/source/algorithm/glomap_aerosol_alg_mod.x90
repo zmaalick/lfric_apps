@@ -45,6 +45,7 @@ contains
   !>@param[in]     cloud_fields          humidity related fields
   !>@param[in]     theta_in_wth          Potential temperature (theta) wth space
   !>@param[in]     exner_in_wth          Exner Pressure in theta space
+  !>@param[in]     rho_in_wth            Dry density in theta space
   !>@param[in]     mr                    Mixing ratios at time level n
   !>@param[in]     timestep              Current timestep number
 
@@ -52,6 +53,7 @@ contains
                                  cloud_fields,                                 &
                                  theta_in_wth,                                 &
                                  exner_in_wth,                                 &
+                                 rho_in_wth,                                   &
                                  mr_n,                                         &
                                  timestep )
 
@@ -64,6 +66,7 @@ contains
     type( field_collection_type ), intent( in    ) :: cloud_fields
     type( field_type ), intent( in ) :: theta_in_wth
     type( field_type ), intent( in ) :: exner_in_wth
+    type( field_type ), intent( in ) :: rho_in_wth
     type( field_type ), intent( in ) :: mr_n(nummr)
     integer( kind=i_def ), intent( in ) :: timestep
 
@@ -375,6 +378,7 @@ contains
       ! computed only when requested
       call output_diags_for_glomap_ccn( theta_in_wth,                          &
                                         exner_in_wth,                          &
+                                        rho_in_wth,                            &
                                         n_ait_sol,                             &
                                         n_acc_sol,                             &
                                         n_cor_sol,                             &

@@ -444,6 +444,7 @@ contains
     type( field_type ), pointer :: w_in_wth     ! Vertical component of winds
     type( field_type ), pointer :: wetrho_in_w3 ! Wet density in W3
     type( field_type ), pointer :: wetrho_in_wth ! Wet density in WTHETA
+    type( field_type ), pointer :: rho_in_wth    ! Dry density in WTHETA
 
 
     ! Time variables
@@ -723,6 +724,7 @@ contains
     call derived_fields%get_field('w_in_wth', w_in_wth)
     call derived_fields%get_field('wetrho_in_w3', wetrho_in_w3)
     call derived_fields%get_field('wetrho_in_wth', wetrho_in_wth)
+    call derived_fields%get_field('rho_in_wth', rho_in_wth)
 
     ! Unpack other fields
     call radiation_fields%get_field('sin_stellar_declination_rts',             &
@@ -1665,6 +1667,7 @@ contains
       ! computed only when requested
       call output_diags_for_glomap_ccn( state(igh_t),                          &
                                         exner_in_wth,                          &
+                                        rho_in_wth,                            &
                                         n_ait_sol,                             &
                                         n_acc_sol,                             &
                                         n_cor_sol,                             &
