@@ -30,13 +30,15 @@ contains
 
   !> @brief Compute and output the CN and CCN number concentrations and the
   !>        dust mass concentrations
-  !> @details Reproduces the UM diagnostics m01s38i437, m01s38i700 and
-  !>          m01s38i701 (number concentrations) and m01s38i502 and
-  !>          m01s38i503 (dust mass concentrations). The dry modal diameters
-  !>          are only refreshed on RADAER timesteps on the GLOMAP
-  !>          climatology path, so requesting the number concentrations more
-  !>          frequently than the RADAER call reuses the diameters of the
-  !>          most recent RADAER timestep.
+  !> @details The number concentrations count the particles per unit volume
+  !>          with a dry diameter above 3 nm (condensation nuclei), 30 nm and
+  !>          50 nm (cloud condensation nuclei), summed over the GLOMAP modes.
+  !>          The dust mass concentrations are the dust mass mixing ratios of
+  !>          the accumulation and coarse insoluble modes converted to mass
+  !>          per unit volume. The dry modal diameters are only refreshed on
+  !>          RADAER timesteps on the GLOMAP climatology path, so requesting
+  !>          the number concentrations more frequently than the RADAER call
+  !>          reuses the diameters of the most recent RADAER timestep.
   !> @param[in] theta_in_wth  Potential temperature field
   !> @param[in] exner_in_wth  Exner pressure in potential temperature space
   !> @param[in] n_ait_sol     Aitken soluble mode number mixing ratio

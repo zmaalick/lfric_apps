@@ -14,9 +14,9 @@
 !>
 !>            0.5 * nd * ( 1 - erf( ln(dp0/drydp) / (sqrt(2)*ln(sigmag)) ) )
 !>
-!>          summed over the modes. This reproduces the UM/UKCA diagnostics
-!>          m01s38i437 (dp0 = 3 nm), m01s38i700 (dp0 = 30 nm) and
-!>          m01s38i701 (dp0 = 50 nm), computed in ukca_aero_ctl.
+!>          summed over the modes. This gives the condensation nuclei count
+!>          (dp0 = 3 nm) and the cloud condensation nuclei counts at two
+!>          activation thresholds (dp0 = 30 nm and dp0 = 50 nm).
 !>
 !>          Only the six modes that carry a dry modal diameter in LFRic are
 !>          summed. The nucleation-soluble mode is omitted because LFRic has
@@ -24,12 +24,10 @@
 !>          30 nm and 50 nm thresholds but not at 3 nm, so the condensation
 !>          nuclei count is a low estimate under prognostic UKCA.
 !>
-!>          The dust mass concentrations reproduce m01s38i502 and m01s38i503
-!>          from ukca_mode_diags_mod, where the CMIP6 component mass
-!>          concentration reduces to the component mass mixing ratio times
-!>          the air density p / (Rd * T). They are computed here rather than
-!>          as an XIOS expression so that every operand is on the aerosol
-!>          mesh and uses the same pressure and temperature as UKCA.
+!>          The dust mass concentrations are the dust mass mixing ratios of
+!>          the accumulation and coarse insoluble modes multiplied by the
+!>          air density p / (Rd * T). They are computed here rather than as
+!>          an XIOS expression so that every operand is on the aerosol mesh.
 !>
 !>          Every output field is only populated when it has been requested
 !>          as a diagnostic; unrequested fields share the empty data array
@@ -306,8 +304,7 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
 
     if ( l_number_conc ) then
 
-      ! Number density of air from pressure and temperature, matching
-      ! aird in ukca_mode_diags_mod
+      ! Number density of air molecules from pressure and temperature
       air_num_dens = pressure / ( temperature * boltzmann * m3_to_cm3 )
 
       ! Number mixing ratios are per air molecule, so scaling by the air
@@ -363,8 +360,7 @@ subroutine glomap_ccn_diag_code( nlayers,                                      &
 
     !-------------------------------------------------------------------------
     ! Dust mass concentrations: mass mixing ratio times the mass density of
-    ! dry air, as for the UKCA component mass concentrations in
-    ! ukca_mode_diags_mod
+    ! dry air
     !-------------------------------------------------------------------------
 
     if ( l_du_acc_ins .or. l_du_cor_ins ) then
