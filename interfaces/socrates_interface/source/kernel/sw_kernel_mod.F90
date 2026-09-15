@@ -36,7 +36,7 @@ private
 ! Contains the metadata needed by the PSy layer.
 type, public, extends(kernel_type) :: sw_kernel_type
   private
-  type(arg_type) :: meta_args(99) = (/ &
+  type(arg_type) :: meta_args(100) = (/ &
     arg_type(GH_FIELD,  GH_REAL,    GH_READWRITE, Wtheta),                    & ! sw_heating_rate_rts
     arg_type(GH_FIELD,  GH_REAL,    GH_READWRITE, ANY_DISCONTINUOUS_SPACE_1), & ! sw_down_surf_rts
     arg_type(GH_FIELD,  GH_REAL,    GH_READWRITE, ANY_DISCONTINUOUS_SPACE_1), & ! sw_direct_surf_rts
@@ -136,7 +136,8 @@ type, public, extends(kernel_type) :: sw_kernel_type
     arg_type(GH_FIELD,  GH_REAL,    GH_WRITE,     ANY_DISCONTINUOUS_SPACE_1), & ! sw_direct_uv_clear_surf_rts
     arg_type(GH_FIELD,  GH_REAL,    GH_WRITE,     ANY_DISCONTINUOUS_SPACE_1), & ! sw_up_uv_surf_rts
     arg_type(GH_FIELD,  GH_REAL,    GH_WRITE,     ANY_DISCONTINUOUS_SPACE_1), & ! sw_up_uv_clear_surf_rts
-    arg_type(GH_FIELD,  GH_REAL,    GH_WRITE,     ANY_DISCONTINUOUS_SPACE_8)  & ! photolysis_rates_rts
+    arg_type(GH_FIELD,  GH_REAL,    GH_WRITE,     ANY_DISCONTINUOUS_SPACE_8), & ! photolysis_rates_rts
+    arg_type(GH_FIELD,  GH_REAL,    GH_WRITE,     ANY_DISCONTINUOUS_SPACE_6)  & ! sw_diffuse_rts
     /)
   integer :: operates_on = DOMAIN
 contains
@@ -251,6 +252,7 @@ contains
 !> @param[in,out] sw_up_uv_surf_rts         Diagnostic: UV upwards surface flux
 !> @param[in,out] sw_up_uv_clear_surf_rts   Diagnostic: Clear-sky UV upwards surface flux
 !> @param[in,out] photolysis_rates_rts      Diagnostic: Photolysis rates
+!> @param[in,out] sw_diffuse_rts            Diagnostic: SW diffuse downward flux on radiation levels
 !> @param[in]     ndf_wth                   No. DOFs per cell for wth space
 !> @param[in]     undf_wth                  No. unique of DOFs for wth space
 !> @param[in]     map_wth                   Dofmap for wth space column base cell
@@ -316,7 +318,7 @@ subroutine sw_code(nlayers, n_profile, &
     sw_down_uv_surf_rts, sw_down_uv_clear_surf_rts, &
     sw_direct_uv_surf_rts, sw_direct_uv_clear_surf_rts, &
     sw_up_uv_surf_rts, sw_up_uv_clear_surf_rts, &
-    photolysis_rates_rts, &
+    photolysis_rates_rts, sw_diffuse_rts, &
     ndf_wth, undf_wth, map_wth, &
     ndf_2d, undf_2d, map_2d, &
     ndf_tile, undf_tile, map_tile, &
@@ -443,7 +445,7 @@ subroutine sw_code(nlayers, n_profile, &
     cloud_extinction_rts, cloud_weight_extinction_rts, &
     sw_aer_optical_depth_rts
   real(r_def), pointer, dimension(:), intent(inout) :: & ! flux
-    sw_direct_rts, sw_down_rts, sw_up_rts, &
+    sw_direct_rts, sw_down_rts, sw_up_rts, sw_diffuse_rts, &
     sw_direct_clear_rts, sw_down_clear_rts, sw_up_clear_rts
   real(r_def), pointer, dimension(:), intent(inout) :: & ! bflux
     sw_direct_band_rts, sw_down_band_rts, sw_up_band_rts, &
@@ -463,6 +465,13 @@ subroutine sw_code(nlayers, n_profile, &
   integer(i_def) :: ph_0, ph_last, twod_1, twod_last
   type(StrDiag)  :: sw_diag
   logical        :: l_aerosol_mode
+
+  ! Scratch storage for the direct and total downward fluxes on levels when
+  ! the diffuse flux is requested but the corresponding on-levels fluxes are
+  ! not themselves output. The diffuse downward flux is formed from these.
+  real(r_def), allocatable, target :: sw_direct_scratch(:,:)
+  real(r_def), allocatable, target :: sw_down_scratch(:,:)
+  real(r_def), pointer :: sw_diffuse_ptr(:,:)
 
   ! Segmentation variables for threading call to Socrates
   integer(i_def) :: max_threads, soc_sw_block, seg_start, seg_end, &
@@ -529,14 +538,28 @@ subroutine sw_code(nlayers, n_profile, &
   sw_diag%flux_direct_toa(unlit_list) = 0.0_r_def
 
   ! Diagnosed on request:
+  ! The diffuse downward flux is the total downward flux minus the direct
+  ! downward flux, so both are needed on levels when the diffuse flux is
+  ! requested. Point the solver at the requested output arrays where present,
+  ! otherwise at local scratch, so the difference can be formed after the
+  ! solver has run.
+  nullify(sw_diffuse_ptr)
   if (.not. associated(sw_direct_rts, empty_real_data)) then
     sw_diag%flux_direct(0:nlayers, 1:n_profile) &
                     => sw_direct_rts(flux_0:flux_last)
+    sw_diag%flux_direct(:, unlit_list) = 0.0_r_def
+  else if (.not. associated(sw_diffuse_rts, empty_real_data)) then
+    allocate(sw_direct_scratch(0:nlayers, 1:n_profile))
+    sw_diag%flux_direct => sw_direct_scratch
     sw_diag%flux_direct(:, unlit_list) = 0.0_r_def
   end if
   if (.not. associated(sw_down_rts, empty_real_data)) then
     sw_diag%flux_down(0:nlayers, 1:n_profile) &
                     => sw_down_rts(flux_0:flux_last)
+    sw_diag%flux_down(:, unlit_list) = 0.0_r_def
+  else if (.not. associated(sw_diffuse_rts, empty_real_data)) then
+    allocate(sw_down_scratch(0:nlayers, 1:n_profile))
+    sw_diag%flux_down => sw_down_scratch
     sw_diag%flux_down(:, unlit_list) = 0.0_r_def
   end if
   if (.not. associated(sw_up_rts, empty_real_data)) then
@@ -883,6 +906,16 @@ subroutine sw_code(nlayers, n_profile, &
       !$OMP end PARALLEL
     end if
   end do
+
+  ! Form the diffuse downward flux on levels as the total downward flux minus
+  ! the direct downward flux. Unlit points were zeroed in both contributions,
+  ! so the difference is zero there.
+  if (.not. associated(sw_diffuse_rts, empty_real_data)) then
+    sw_diffuse_ptr(0:nlayers, 1:n_profile) => sw_diffuse_rts(flux_0:flux_last)
+    sw_diffuse_ptr(:, :) = sw_diag%flux_down(:, :) - sw_diag%flux_direct(:, :)
+  end if
+  if (allocated(sw_direct_scratch)) deallocate(sw_direct_scratch)
+  if (allocated(sw_down_scratch)) deallocate(sw_down_scratch)
 
 end subroutine sw_code
 end module sw_kernel_mod

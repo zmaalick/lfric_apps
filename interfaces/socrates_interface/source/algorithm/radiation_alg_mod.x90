@@ -254,7 +254,8 @@ subroutine radiation_alg(config, dtheta_rad, theta, exner, mr, moist_dyn,     &
   ! Local diagnostic fields
   type( field_type ) :: &
     lw_up_surf, sw_up_surf, lw_up_toa, sw_up_toa, sw_direct_toa, &
-    sw_direct_rts, sw_down_rts, sw_up_rts, lw_down_rts, lw_up_rts, &
+    sw_direct_rts, sw_down_rts, sw_up_rts, sw_diffuse_rts, &
+    lw_down_rts, lw_up_rts, &
     sw_direct_band_rts, sw_down_band_rts, sw_up_band_rts, &
     lw_down_band_rts, lw_up_band_rts, &
     cloud_cover_rts, cloud_fraction_rts, cloud_droplet_re_rts, &
@@ -419,7 +420,8 @@ subroutine radiation_alg(config, dtheta_rad, theta, exner, mr, moist_dyn,     &
   ! ------------------------------------
   call initialise_diags_for_radiation(lw_down_surf, lw_heating_rate, &
     lw_up_surf, sw_up_surf, lw_up_toa, sw_up_toa, sw_direct_toa, &
-    sw_direct_rts, sw_down_rts, sw_up_rts, lw_down_rts, lw_up_rts, &
+    sw_direct_rts, sw_down_rts, sw_up_rts, sw_diffuse_rts, &
+    lw_down_rts, lw_up_rts, &
     sw_direct_band_rts, sw_down_band_rts, sw_up_band_rts, &
     lw_down_band_rts, lw_up_band_rts, &
     cloud_cover_rts, cloud_fraction_rts, cloud_droplet_re_rts, &
@@ -548,7 +550,7 @@ subroutine radiation_alg(config, dtheta_rad, theta, exner, mr, moist_dyn,     &
       sw_down_uv_surf_rts, sw_down_uv_clear_surf_rts, &
       sw_direct_uv_surf_rts, sw_direct_uv_clear_surf_rts, &
       sw_up_uv_surf_rts, sw_up_uv_clear_surf_rts, &
-      photolysis_rates_rts ) )
+      photolysis_rates_rts, sw_diffuse_rts ) )
   end if
   if (rad_inc_this_tstep) then
     ! --------------------------------------------------------------
@@ -729,7 +731,8 @@ subroutine radiation_alg(config, dtheta_rad, theta, exner, mr, moist_dyn,     &
       conv_liquid_mmr, conv_frozen_mmr, conv_frozen_number, sigma_ml, &
       sigma_mi, rand_seed, layer_heat_capacity, sulphuric, &
       lw_up_surf, sw_up_surf, lw_up_toa, sw_up_toa, sw_direct_toa, &
-      sw_direct_rts, sw_down_rts, sw_up_rts, lw_down_rts, lw_up_rts, &
+      sw_direct_rts, sw_down_rts, sw_up_rts, sw_diffuse_rts, &
+      lw_down_rts, lw_up_rts, &
       sw_direct_band_rts, sw_down_band_rts, sw_up_band_rts, &
       lw_down_band_rts, lw_up_band_rts, &
       cloud_cover_rts, cloud_fraction_rts, cloud_droplet_re_rts, &

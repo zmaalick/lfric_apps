@@ -149,6 +149,7 @@ contains
     type( field_type ) :: grid_canopy_water
     type( field_type ) :: grid_snow_mass
     type( field_type ) :: grid_snowmelt
+    type( field_type ) :: snow_layer_density
     type( field_type ) :: throughfall
     type( field_type ) :: grid_throughfall
 
@@ -229,7 +230,8 @@ contains
 
     ! Initialise the snow diagnostics
     call initialise_diags_for_jules_snow(soil_moist_sat,                       &
-                                         grid_snow_mass, grid_snowmelt)
+                                         grid_snow_mass, grid_snowmelt,        &
+                                         snow_layer_density)
 
     ! Initialise the soil diagnostics
     call initialise_diags_for_jules_soil(soil_moist_sat,                       &
@@ -288,7 +290,8 @@ contains
                                      snowpack_density, snow_layer_temp,        &
                                      snow_layer_thickness, snow_layer_ice_mass,&
                                      snow_layer_liq_mass, snow_layer_rgrain,   &
-                                     grid_snow_mass, grid_snowmelt)
+                                     grid_snow_mass, grid_snowmelt,            &
+                                     snow_layer_density)
 
       ! Output the jules soil diagnostics
       call output_diags_for_jules_soil(tile_fraction, soil_moisture_content,   &
@@ -305,7 +308,7 @@ contains
       call output_diags_for_jules_seaice(tile_fraction, sea_ice_thickness,     &
                                     sea_ice_temperature, sea_ice_conductivity, &
                                     sea_ice_pensolar, melt_pond_fraction,      &
-                                    melt_pond_depth)
+                                    melt_pond_depth, snowice_sublimation)
 
     end if
 

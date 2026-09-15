@@ -21,6 +21,7 @@ module jules_snow_diags_mod
   ! Logical indicating whether diagnostics are requested
   logical( l_def ) :: grid_snow_mass_flag
   logical( l_def ) :: grid_snowmelt_flag
+  logical( l_def ) :: snow_layer_density_flag
 
   public :: initialise_diags_for_jules_snow
   public :: output_diags_for_jules_snow
@@ -31,9 +32,11 @@ contains
   !> @param[in]     soil_moist_sat     Soil moisture content at saturation
   !> @param[in,out] grid_snow_mass     Grid snow mass
   !> @param[in,out] grid_snowmelt      Grid snowmelt
+  !> @param[in,out] snow_layer_density Bulk density of snow layers
 
   subroutine initialise_diags_for_jules_snow(soil_moist_sat,                   &
-                                         grid_snow_mass, grid_snowmelt)
+                                         grid_snow_mass, grid_snowmelt,        &
+                                         snow_layer_density)
 
     implicit none
 
@@ -43,6 +46,7 @@ contains
     ! Diagnostic fields to initialise
     type( field_type ), intent(inout) :: grid_snow_mass
     type( field_type ), intent(inout) :: grid_snowmelt
+    type( field_type ), intent(inout) :: snow_layer_density
     integer( tik )                    :: id
 
     if ( LPROF ) call start_timing( id, 'diags.jules_snow' )
@@ -51,6 +55,10 @@ contains
     grid_snow_mass_flag = init_diag(grid_snow_mass, 'snow__grid_snow_mass')
     if (grid_snow_mass_flag) call invoke( setval_c(grid_snow_mass, 0.0_r_def) )
     grid_snowmelt_flag = init_diag(grid_snowmelt, 'snow__grid_snowmelt')
+
+    ! Snow-layer fields
+    snow_layer_density_flag = init_diag(snow_layer_density,                    &
+                                        'snow__snow_layer_density')
 
     if ( LPROF ) call stop_timing( id, 'diags.jules_snow' )
 
@@ -70,6 +78,7 @@ contains
   !> @param[in]     snow_layer_rgrain        Snow grain size in snow layers on tiles
   !> @param[in]     grid_snow_mass           Grid snow mass
   !> @param[in,out] grid_snowmelt            Grid snowmelt
+  !> @param[in,out] snow_layer_density       Bulk density of snow layers on tiles
 
   subroutine output_diags_for_jules_snow(tile_fraction, tile_snow_mass,        &
                                      snowice_melt,                             &
@@ -77,9 +86,11 @@ contains
                                      snowpack_density, snow_layer_temp,        &
                                      snow_layer_thickness, snow_layer_ice_mass,&
                                      snow_layer_liq_mass, snow_layer_rgrain,   &
-                                     grid_snow_mass, grid_snowmelt)
+                                     grid_snow_mass, grid_snowmelt,            &
+                                     snow_layer_density)
 
-    use jules_control_init_mod, only : n_land_tile
+    use jules_control_init_mod,       only : n_land_tile
+    use snow_layer_density_kernel_mod, only : snow_layer_density_kernel_type
 
     implicit none
 
@@ -98,6 +109,7 @@ contains
 
     ! Diagnostics locally computed here from other fields
     type( field_type ), intent(inout) :: grid_snowmelt
+    type( field_type ), intent(inout) :: snow_layer_density
     integer( tik )                    :: id
 
     if ( LPROF ) call start_timing( id, 'diags.jules_snow' )
@@ -124,6 +136,15 @@ contains
     ! Diagnostics computed within the kernel
     if (grid_snow_mass_flag) then
       call grid_snow_mass%write_field()
+    end if
+
+    ! Snow-layer bulk density, computed from the layer masses and thickness
+    if (snow_layer_density_flag) then
+      call invoke(snow_layer_density_kernel_type(snow_layer_density,          &
+                                                 snow_layer_ice_mass,         &
+                                                 snow_layer_liq_mass,         &
+                                                 snow_layer_thickness) )
+      call snow_layer_density%write_field()
     end if
 
     if ( LPROF ) call stop_timing( id, 'diags.jules_snow' )

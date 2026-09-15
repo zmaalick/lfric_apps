@@ -45,6 +45,7 @@ module radiation_diags_mod
   logical( l_def ) :: sw_direct_rts_flag
   logical( l_def ) :: sw_down_rts_flag
   logical( l_def ) :: sw_up_rts_flag
+  logical( l_def ) :: sw_diffuse_rts_flag
   logical( l_def ) :: lw_down_rts_flag
   logical( l_def ) :: lw_up_rts_flag
   logical( l_def ) :: sw_direct_clear_rts_flag
@@ -101,7 +102,8 @@ contains
 !> @brief Initialise fields for locally-computed diagnostics
 subroutine initialise_diags_for_radiation( lw_down_surf, lw_heating_rate, &
   lw_up_surf, sw_up_surf, lw_up_toa, sw_up_toa, sw_direct_toa, &
-  sw_direct_rts, sw_down_rts, sw_up_rts, lw_down_rts, lw_up_rts, &
+  sw_direct_rts, sw_down_rts, sw_up_rts, sw_diffuse_rts, &
+  lw_down_rts, lw_up_rts, &
   sw_direct_band_rts, sw_down_band_rts, sw_up_band_rts, &
   lw_down_band_rts, lw_up_band_rts, &
   cloud_cover_rts, cloud_fraction_rts, cloud_droplet_re_rts, &
@@ -139,7 +141,8 @@ subroutine initialise_diags_for_radiation( lw_down_surf, lw_heating_rate, &
   ! Diagnostic fields to initialise
   type( field_type ), intent(inout) :: &
     lw_up_surf, sw_up_surf, lw_up_toa, sw_up_toa, sw_direct_toa, &
-    sw_direct_rts, sw_down_rts, sw_up_rts, lw_down_rts, lw_up_rts, &
+    sw_direct_rts, sw_down_rts, sw_up_rts, sw_diffuse_rts, &
+    lw_down_rts, lw_up_rts, &
     sw_direct_band_rts, sw_down_band_rts, sw_up_band_rts, &
     lw_down_band_rts, lw_up_band_rts, &
     cloud_cover_rts, cloud_fraction_rts, cloud_droplet_re_rts, &
@@ -300,6 +303,8 @@ subroutine initialise_diags_for_radiation( lw_down_surf, lw_heating_rate, &
                             'radiation__sw_down_rts' )
   sw_up_rts_flag           = init_diag( sw_up_rts, &
                             'radiation__sw_up_rts' )
+  sw_diffuse_rts_flag      = init_diag( sw_diffuse_rts, &
+                            'radiation__sw_diffuse_rts' )
   lw_down_rts_flag         = init_diag( lw_down_rts, &
                             'radiation__lw_down_rts' )
   lw_up_rts_flag           = init_diag( lw_up_rts, &
@@ -386,7 +391,8 @@ subroutine output_diags_for_radiation( dtheta_rad, &
   conv_liquid_mmr, conv_frozen_mmr, conv_frozen_number, sigma_ml, &
   sigma_mi, rand_seed, layer_heat_capacity, sulphuric, &
   lw_up_surf, sw_up_surf, lw_up_toa, sw_up_toa, sw_direct_toa, &
-  sw_direct_rts, sw_down_rts, sw_up_rts, lw_down_rts, lw_up_rts, &
+  sw_direct_rts, sw_down_rts, sw_up_rts, sw_diffuse_rts, &
+  lw_down_rts, lw_up_rts, &
   sw_direct_band_rts, sw_down_band_rts, sw_up_band_rts, &
   lw_down_band_rts, lw_up_band_rts, &
   cloud_cover_rts, cloud_fraction_rts, cloud_droplet_re_rts, &
@@ -462,7 +468,8 @@ subroutine output_diags_for_radiation( dtheta_rad, &
     cloud_absorptivity_rts, cloud_weight_absorptivity_rts, &
     cloud_extinction_rts, cloud_weight_extinction_rts, &
     sw_aer_optical_depth_rts, lw_aer_optical_depth_rts, &
-    sw_direct_rts, sw_down_rts, sw_up_rts, lw_down_rts, lw_up_rts, &
+    sw_direct_rts, sw_down_rts, sw_up_rts, sw_diffuse_rts, &
+    lw_down_rts, lw_up_rts, &
     sw_direct_clear_rts, sw_down_clear_rts, sw_up_clear_rts, &
     lw_down_clear_rts, lw_up_clear_rts, &
     sw_direct_band_rts, sw_down_band_rts, sw_up_band_rts, &
@@ -693,6 +700,7 @@ subroutine output_diags_for_radiation( dtheta_rad, &
   if ( sw_direct_rts_flag ) call sw_direct_rts%write_field()
   if ( sw_down_rts_flag ) call sw_down_rts%write_field()
   if ( sw_up_rts_flag ) call sw_up_rts%write_field()
+  if ( sw_diffuse_rts_flag ) call sw_diffuse_rts%write_field()
   if ( lw_down_rts_flag ) call lw_down_rts%write_field()
   if ( lw_up_rts_flag ) call lw_up_rts%write_field()
 

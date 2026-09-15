@@ -615,6 +615,7 @@
   <field id="snow__snow_layer_ice_mass" name="snow_layer_ice_mass" long_name="snow_layer_ice_mass" unit="kg m-2" domain_ref="face" axis_ref="snow_layers_and_tiles" />
   <field id="snow__snow_layer_liq_mass" name="snow_layer_liq_mass" long_name="snow_layer_liquid_mass" unit="kg m-2" domain_ref="face" axis_ref="snow_layers_and_tiles" />
   <field id="snow__snow_layer_rgrain" name="snow_layer_rgrain" long_name="snow_layer_grain_size" unit="microns" domain_ref="face" axis_ref="snow_layers_and_tiles" />
+  <field id="snow__snow_layer_density" name="snow_layer_density" long_name="snow_layer_density" unit="kg m-3" domain_ref="face" axis_ref="snow_layers_and_tiles" />
   <field id="zoomed__snowpack_density_C3grass" field_ref="snow__snowpack_density" axis_ref="surface_tiles_C3grass_zoom"/>
   <field id="snow__snowpack_density_C3grass" name="snowpack_density_C3grass" long_name="snowpack_density_C3grass" domain_ref="face"> zoomed__snowpack_density_C3grass </field>
   <!-- Jules sea ice diagnostics -->
@@ -626,6 +627,8 @@
   <field id="processed__sea_ice_pensolar" name="sea_ice_pensolar_gbm" long_name="sea_ice_pensolar_grid_box_mean" unit="W m-2" domain_ref="face" axis_ref="sea_ice_categories">seaice__sea_ice_pensolar * seaice__sea_ice_fraction</field>
   <field id="seaice__melt_pond_fraction" name="melt_pond_fraction" long_name="sea ice melt pond fraction" unit="1" domain_ref="face" axis_ref="sea_ice_categories" />
   <field id="seaice__melt_pond_depth" name="melt_pond_depth" long_name="sea ice melt pond depth" unit="m" domain_ref="face" axis_ref="sea_ice_categories" />
+  <field id="seaice__sea_ice_sublimation" name="sea_ice_sublimation" long_name="sea_ice_sublimation_per_ice_surface" unit="kg m-2 s-1" domain_ref="face" axis_ref="sea_ice_categories" />
+  <field id="processed__sea_ice_sublimation" name="sea_ice_sublimation_gbm" long_name="sea_ice_sublimation_grid_box_mean" unit="kg m-2 s-1" domain_ref="face" axis_ref="sea_ice_categories">seaice__sea_ice_sublimation * seaice__sea_ice_fraction</field>
   <!-- Jules soil diagnostics -->
   <field id="soil__surface_runoff" name="surface_runoff" long_name="surface_runoff_flux" unit="kg m-2 s-1" domain_ref="face" />
   <field id="soil__sub_surface_runoff" name="sub_surface_runoff" long_name="subsurface_runoff_flux" unit="kg m-2 s-1" domain_ref="face" />
@@ -755,6 +758,7 @@
   <field id="radiation__sw_direct_rts" name="sw_direct_rts" long_name="direct_shortwave_flux_radiative_timestep" unit="W m-2" domain_ref="face" axis_ref="radiation_levels" />
   <field id="radiation__sw_down_rts" name="sw_down_rts" long_name="downward_shortwave_flux_radiative_timestep" unit="W m-2" domain_ref="face" axis_ref="radiation_levels" />
   <field id="radiation__sw_up_rts" name="sw_up_rts" long_name="upward_shortwave_flux_radiative_timestep" unit="W m-2" domain_ref="face" axis_ref="radiation_levels" />
+  <field id="radiation__sw_diffuse_rts" name="sw_diffuse_rts" long_name="diffuse_shortwave_flux_radiative_timestep" unit="W m-2" domain_ref="face" axis_ref="radiation_levels" />
   <field id="radiation__sw_direct_clear_rts" name="sw_direct_clear_rts" long_name="direct_clear_shortwave_flux_radiative_timestep" unit="W m-2" domain_ref="face" axis_ref="radiation_levels" />
   <field id="radiation__sw_down_clear_rts" name="sw_down_clear_rts" long_name="downward_clear_shortwave_flux_radiative_timestep" unit="W m-2" domain_ref="face" axis_ref="radiation_levels" />
   <field id="radiation__sw_up_clear_rts" name="sw_up_clear_rts" long_name="upward_clear_shortwave_flux_radiative_timestep" unit="W m-2" domain_ref="face" axis_ref="radiation_levels" />

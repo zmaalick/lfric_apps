@@ -29,11 +29,12 @@ contains
   !> @param[in]     sea_ice_pensolar       Penetrating solar radiation into sea ice
   !> @param[in]     melt_pond_fraction     Melt pond fraction
   !> @param[in]     melt_pond_depth        Melt pond depth
+  !> @param[in]     snowice_sublimation    Snow and ice sublimation rate on tiles
 
   subroutine output_diags_for_jules_seaice(tile_fraction, sea_ice_thickness,     &
                                       sea_ice_temperature, sea_ice_conductivity, &
                                       sea_ice_pensolar, melt_pond_fraction,      &
-                                      melt_pond_depth)
+                                      melt_pond_depth, snowice_sublimation)
 
     use sci_multi_extract_kernel_mod, only: multi_extract_kernel_type
 
@@ -43,10 +44,10 @@ contains
     type( field_type ), intent(in) :: tile_fraction, sea_ice_thickness,          &
                                       sea_ice_temperature, sea_ice_conductivity, &
                                       sea_ice_pensolar, melt_pond_fraction,      &
-                                      melt_pond_depth
+                                      melt_pond_depth, snowice_sublimation
 
     ! Diagnostics locally computed here from other fields
-    type( field_type )             :: sea_ice_fraction
+    type( field_type )             :: sea_ice_fraction, sea_ice_sublimation
     integer( tik )                 :: id
 
     if ( LPROF ) call start_timing( id, 'diags.jules_seaice' )
@@ -64,6 +65,16 @@ contains
     call invoke(multi_extract_kernel_type(sea_ice_fraction, tile_fraction,     &
                                             first_sea_ice_tile, n_sea_ice_tile))
     call sea_ice_fraction%write_field('seaice__sea_ice_fraction')
+
+    ! Get sea ice sublimation rate per category from the sea-ice portion of the
+    ! surface tile sublimation field. The grid-box-mean (fraction-weighted) form
+    ! is derived from this via the processed__sea_ice_sublimation registry
+    ! expression.
+    call sea_ice_thickness%copy_field_properties(sea_ice_sublimation)
+    call invoke(multi_extract_kernel_type(sea_ice_sublimation,                  &
+                                          snowice_sublimation,                  &
+                                          first_sea_ice_tile, n_sea_ice_tile))
+    call sea_ice_sublimation%write_field('seaice__sea_ice_sublimation')
 
     if ( LPROF ) call stop_timing( id, 'diags.jules_seaice' )
 
